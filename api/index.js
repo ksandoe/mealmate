@@ -12,67 +12,40 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({
     message: 'MealMate API',
-    version: '0.1.0',
+    version: '0.2.0',
     endpoints: {
+      profile: '/api/profile',
       recipes: '/api/recipes',
-      ingredients: '/api/ingredients',
-      shopping: '/api/shopping'
+      recipeSearch: '/api/recipes/search',
+      pantry: '/api/pantry',
+      groceryList: '/api/grocery-list',
+      deals: '/api/deals',
+      health: '/api/health'
     }
   });
 });
 
-// Recipe routes
-app.get('/api/recipes', (req, res) => {
-  // TODO: Return recipes with optional filtering
-  res.json({ recipes: [] });
+// Liveness check used by the smoke test.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
-app.get('/api/recipes/search', (req, res) => {
-  // TODO: Search recipes by ingredients
-  res.json({ recipes: [] });
-});
+app.use('/api/profile', require('./routes/profile'));
+app.use('/api/recipes', require('./routes/recipes'));
+app.use('/api/pantry', require('./routes/pantry'));
+app.use('/api/grocery-list', require('./routes/grocery-list'));
+app.use('/api/deals', require('./routes/deals'));
 
-// Ingredient routes
-app.get('/api/ingredients', (req, res) => {
-  // TODO: Return pantry ingredients
-  res.json({ ingredients: [] });
-});
-
-app.post('/api/ingredients', (req, res) => {
-  // TODO: Add ingredient to pantry
-  res.json({ message: 'Ingredient added' });
-});
-
-app.delete('/api/ingredients/:id', (req, res) => {
-  // TODO: Remove ingredient from pantry
-  res.json({ message: 'Ingredient removed' });
-});
-
-// Shopping routes
-app.get('/api/shopping', (req, res) => {
-  // TODO: Return shopping list
-  res.json({ items: [] });
-});
-
-app.post('/api/shopping', (req, res) => {
-  // TODO: Add item to shopping list
-  res.json({ message: 'Item added to shopping list' });
-});
-
-app.put('/api/shopping/:id', (req, res) => {
-  // TODO: Update shopping list item
-  res.json({ message: 'Item updated' });
-});
-
-app.delete('/api/shopping/:id', (req, res) => {
-  // TODO: Remove item from shopping list
-  res.json({ message: 'Item removed from shopping list' });
+// 404 for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
 });
 
 // Error handling
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  const status = err.status || 500;
+  if (status >= 500) console.error(err.stack);
+  res.status(status).json({ error: err.message || 'Something went wrong!' });
 });
 
 // Start server

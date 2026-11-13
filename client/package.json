@@ -2,6 +2,7 @@
   "name": "mealmate-client",
   "version": "0.1.0",
   "description": "MealMate front-end application",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

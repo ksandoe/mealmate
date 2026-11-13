@@ -1,0 +1,517 @@
+openapi: 3.0.3
+info:
+  title: MealMate API
+  version: 0.2.0
+  description: |
+    Local REST API for MealMate Prototype 2. The server is the only
+    component that talks to Supabase (service role key); the client app
+    calls these endpoints and never touches the database directly.
+servers:
+  - url: http://localhost:3001
+
+tags:
+  - name: profile
+  - name: recipes
+  - name: pantry
+  - name: grocery-list
+  - name: deals
+  - name: meta
+
+paths:
+  /api/health:
+    get:
+      tags: [meta]
+      summary: Liveness check
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+              example: { status: ok }
+
+  /api/profile:
+    get:
+      tags: [profile]
+      summary: Get the default local profile
+      description: Returns the first profile, creating a blank one if none exists.
+      responses:
+        '200':
+          description: The default profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileResponse' }
+              example:
+                profile:
+                  profile_id: a1111111-1111-4111-8111-111111111111
+                  saved_dietary_restrictions: vegetarian
+                  equipment_preferences: microwave,stove
+                  created_at: '2026-11-13T18:43:28.871674+00:00'
+
+  /api/profile/{id}:
+    put:
+      tags: [profile]
+      summary: Save profile settings
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                savedDietaryRestrictions: { type: string, example: 'vegetarian,gluten-free' }
+                equipmentPreferences: { type: string, example: 'microwave,stove' }
+            example: { savedDietaryRestrictions: 'nut-free', equipmentPreferences: 'microwave' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/recipes:
+    get:
+      tags: [recipes]
+      summary: List preset recipes (optionally filtered)
+      parameters:
+        - $ref: '#/components/parameters/MaxCost'
+        - $ref: '#/components/parameters/MaxCookTime'
+        - $ref: '#/components/parameters/Dietary'
+        - $ref: '#/components/parameters/Equipment'
+      responses:
+        '200':
+          description: Recipes with embedded nutrition and ingredients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipes:
+                    type: array
+                    items: { $ref: '#/components/schemas/Recipe' }
+
+  /api/recipes/search:
+    get:
+      tags: [recipes]
+      summary: Match recipes against available ingredients
+      description: |
+        Computes a match percentage per recipe. Staple ingredients
+        (is_staple=TRUE: salt, oil, etc.) are ignored. If `ingredients`
+        is omitted, the profile's pantry is used instead.
+      parameters:
+        - name: ingredients
+          in: query
+          schema: { type: string, example: 'eggs,milk,bread' }
+          description: Comma-separated ingredient names the user has.
+        - $ref: '#/components/parameters/ProfileIdQuery'
+        - $ref: '#/components/parameters/MaxCost'
+        - $ref: '#/components/parameters/MaxCookTime'
+        - $ref: '#/components/parameters/Dietary'
+        - $ref: '#/components/parameters/Equipment'
+      responses:
+        '200':
+          description: Recipes sorted by match percentage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchResult' }
+              example:
+                results:
+                  - matchPercent: 67
+                    missing: [shredded cheese]
+                    recipe:
+                      recipe_id: b1111111-1111-4111-8111-111111111111
+                      recipe_name: Microwave Scrambled Eggs
+
+  /api/recipes/{id}:
+    get:
+      tags: [recipes]
+      summary: Get one recipe with nutrition and ingredients
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: The recipe
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipe: { $ref: '#/components/schemas/Recipe' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/pantry:
+    get:
+      tags: [pantry]
+      summary: List a profile's pantry ingredients
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdQuery'
+      responses:
+        '200':
+          description: Pantry rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pantry:
+                    type: array
+                    items: { $ref: '#/components/schemas/PantryItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [pantry]
+      summary: Add an ingredient (merges duplicates by name)
+      description: |
+        Implements the "Combining Duplicates" rule: if the name already
+        exists for the profile (case-insensitive), the row is updated
+        and `merged: true` is returned instead of a new row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profileId, ingredientName]
+              properties:
+                profileId: { type: string, format: uuid }
+                ingredientName: { type: string, example: milk }
+                quantityStatus: { type: string, nullable: true, example: 'half a carton' }
+            example: { profileId: 'a1111111-1111-4111-8111-111111111111', ingredientName: 'milk', quantityStatus: 'running low' }
+      responses:
+        '201':
+          description: New row created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PantryItemResponse' }
+        '200':
+          description: Existing row merged/updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PantryItemResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [pantry]
+      summary: Clear All - delete every pantry row for a profile
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdQuery'
+      responses:
+        '200':
+          description: Pantry cleared
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example: { message: Pantry cleared }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/pantry/{id}:
+    delete:
+      tags: [pantry]
+      summary: Remove one pantry ingredient
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Ingredient removed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example: { message: Ingredient removed }
+
+  /api/grocery-list:
+    get:
+      tags: [grocery-list]
+      summary: List a profile's shopping checklist
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdQuery'
+      responses:
+        '200':
+          description: Checklist rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/GroceryItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [grocery-list]
+      summary: Add an item (merges duplicates by name)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profileId, itemName]
+              properties:
+                profileId: { type: string, format: uuid }
+                itemName: { type: string, example: rice }
+            example: { profileId: 'a1111111-1111-4111-8111-111111111111', itemName: 'rice' }
+      responses:
+        '201':
+          description: New row created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroceryItemResponse' }
+        '200':
+          description: Existing row returned (merged)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroceryItemResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/grocery-list/checkout:
+    post:
+      tags: [grocery-list]
+      summary: Done Shopping - move checked items into the pantry
+      description: |
+        Implements the "Waiting on Checkout" rule: only checked items
+        are copied to the pantry (skipping names already there), then
+        removed from the grocery list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profileId]
+              properties:
+                profileId: { type: string, format: uuid }
+            example: { profileId: 'a1111111-1111-4111-8111-111111111111' }
+      responses:
+        '200':
+          description: Checkout result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  moved: { type: integer, example: 2 }
+                  addedToPantry: { type: integer, example: 2 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/grocery-list/{id}:
+    patch:
+      tags: [grocery-list]
+      summary: Check or uncheck a grocery item
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isChecked]
+              properties:
+                isChecked: { type: boolean }
+            example: { isChecked: true }
+      responses:
+        '200':
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroceryItemResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [grocery-list]
+      summary: Remove a grocery item
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example: { message: Item removed from shopping list }
+
+  /api/deals:
+    get:
+      tags: [deals]
+      summary: List mock store deals (optionally by item name)
+      parameters:
+        - name: itemName
+          in: query
+          schema: { type: string, example: eggs }
+          description: Case-insensitive item name filter.
+      responses:
+        '200':
+          description: Deal rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deals:
+                    type: array
+                    items: { $ref: '#/components/schemas/Deal' }
+              example:
+                deals:
+                  - deal_id: e1111111-1111-4111-8111-111111111111
+                    store_name: WinCo
+                    item_name: eggs
+                    sale_price: 2.49
+                    regular_price: 3.29
+                    expiration_date_string: ends Sunday
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Row id (UUID).
+    ProfileIdQuery:
+      name: profileId
+      in: query
+      schema: { type: string, format: uuid }
+      description: Profile whose rows to operate on.
+    MaxCost:
+      name: maxCost
+      in: query
+      schema: { type: number }
+      description: Only recipes with estimated_cost <= this value.
+    MaxCookTime:
+      name: maxCookTime
+      in: query
+      schema: { type: integer }
+      description: Only recipes with cook_time_minutes <= this value.
+    Dietary:
+      name: dietary
+      in: query
+      schema: { type: string, example: 'vegetarian,nut-free' }
+      description: Comma-separated tags; recipe must carry ALL of them.
+    Equipment:
+      name: equipment
+      in: query
+      schema: { type: string, example: 'microwave,stove' }
+      description: Comma-separated appliances the user has; recipe appliances must be a subset.
+
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example: { error: 'profileId is required' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example: { error: 'Recipe abc not found' }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+    MessageResponse:
+      type: object
+      properties:
+        message: { type: string }
+    Profile:
+      type: object
+      properties:
+        profile_id: { type: string, format: uuid }
+        saved_dietary_restrictions: { type: string, nullable: true }
+        equipment_preferences: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    ProfileResponse:
+      type: object
+      properties:
+        profile: { $ref: '#/components/schemas/Profile' }
+    Nutrition:
+      type: object
+      properties:
+        nutrition_id: { type: string, format: uuid }
+        recipe_id: { type: string, format: uuid }
+        calories: { type: integer }
+        protein_grams: { type: integer }
+        carbs_grams: { type: integer }
+        fat_grams: { type: integer }
+    RecipeIngredient:
+      type: object
+      properties:
+        recipe_id: { type: string, format: uuid }
+        ingredient_name: { type: string }
+        is_staple: { type: boolean }
+    Recipe:
+      type: object
+      properties:
+        recipe_id: { type: string, format: uuid }
+        recipe_name: { type: string }
+        step_instructions: { type: string }
+        prep_time_minutes: { type: integer }
+        cook_time_minutes: { type: integer }
+        required_appliances: { type: string, description: 'Comma-separated: microwave, air-fryer, stove' }
+        dietary_tags: { type: string, nullable: true }
+        estimated_cost: { type: number, example: 2.5 }
+        nutritional_data:
+          description: 1:1 nutrition row (object, or one-element array)
+          oneOf:
+            - $ref: '#/components/schemas/Nutrition'
+            - type: array
+              items: { $ref: '#/components/schemas/Nutrition' }
+        recipe_ingredient:
+          type: array
+          items: { $ref: '#/components/schemas/RecipeIngredient' }
+    MatchResult:
+      type: object
+      properties:
+        recipe: { $ref: '#/components/schemas/Recipe' }
+        matchPercent: { type: integer, example: 67 }
+        missing:
+          type: array
+          items: { type: string }
+          description: Non-staple ingredient names the user lacks.
+    PantryItem:
+      type: object
+      properties:
+        pantry_item_id: { type: string, format: uuid }
+        profile_id: { type: string, format: uuid }
+        ingredient_name: { type: string }
+        quantity_status: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    PantryItemResponse:
+      type: object
+      properties:
+        item: { $ref: '#/components/schemas/PantryItem' }
+        merged: { type: boolean, description: 'true if an existing row was updated' }
+    GroceryItem:
+      type: object
+      properties:
+        list_item_id: { type: string, format: uuid }
+        profile_id: { type: string, format: uuid }
+        item_name: { type: string }
+        is_checked: { type: boolean }
+        created_at: { type: string, format: date-time }
+    GroceryItemResponse:
+      type: object
+      properties:
+        item: { $ref: '#/components/schemas/GroceryItem' }
+        merged: { type: boolean }
+    Deal:
+      type: object
+      properties:
+        deal_id: { type: string, format: uuid }
+        store_name: { type: string }
+        item_name: { type: string }
+        sale_price: { type: number, example: 2.49 }
+        regular_price: { type: number, example: 3.29 }
+        expiration_date_string: { type: string, nullable: true }

@@ -13,80 +13,159 @@
       <h1>MealMate</h1>
       <nav>
         <button data-view="find-meals">Find Meals</button>
+        <button data-view="filters">Filters</button>
         <button data-view="manage-food">Manage Food</button>
         <button data-view="shopping">Shopping</button>
+        <button data-view="about-help">About/Help</button>
       </nav>
     </header>
 
+    <div id="app-error" class="app-error" role="alert" hidden></div>
+
     <main>
+      <!-- Find Meals: Enter Ingredients -> Search Recipes -> Recipe Results -->
       <section id="find-meals" class="view active">
         <h2>Find Meals</h2>
-        <div id="ingredient-input">
-          <input type="text" id="ingredient-name" placeholder="Enter ingredient">
-          <button id="add-ingredient">Add</button>
-        </div>
+        <form id="ingredient-form" novalidate>
+          <div class="form-row">
+            <input type="text" id="ingredient-name" placeholder="Enter ingredient"
+                   autocomplete="off" maxlength="60">
+            <button type="submit" id="add-ingredient">Add</button>
+          </div>
+          <p class="field-error" id="ingredient-error" hidden></p>
+        </form>
         <div id="ingredient-list"></div>
-        <div id="filters">
-          <h3>Filters</h3>
-          <div class="filter-group">
-            <label>Budget:</label>
+        <button id="search-recipes" class="btn-primary">Search Recipes</button>
+        <p class="view-hint" id="search-hint">Leave blank to browse all recipes matching your filters.</p>
+        <div id="recipe-results"></div>
+      </section>
+
+      <!-- Recipe Details: includes Macro/Calorie Tracker -->
+      <section id="recipe-details" class="view">
+        <h2>Recipe Details</h2>
+        <button id="back-to-results" class="btn-secondary">&larr; Back to Results</button>
+        <article id="recipe-detail-content"></article>
+      </section>
+
+      <!-- Filters: Budget, Cooking Time, Dietary/Allergy, Cooking Equipment -->
+      <section id="filters" class="view">
+        <h2>Filters</h2>
+        <form id="filters-form" novalidate>
+          <fieldset class="filter-group">
+            <legend>Budget</legend>
             <select id="budget-filter">
               <option value="">Any</option>
               <option value="5">Under $5</option>
               <option value="10">Under $10</option>
               <option value="15">Under $15</option>
             </select>
-          </div>
-          <div class="filter-group">
-            <label>Cooking Time:</label>
+          </fieldset>
+          <fieldset class="filter-group">
+            <legend>Cooking Time</legend>
             <select id="time-filter">
               <option value="">Any</option>
               <option value="15">Under 15 min</option>
               <option value="30">Under 30 min</option>
               <option value="60">Under 60 min</option>
             </select>
-          </div>
-          <div class="filter-group">
-            <label>Dietary:</label>
-            <select id="dietary-filter">
-              <option value="">Any</option>
-              <option value="vegetarian">Vegetarian</option>
-              <option value="gluten-free">Gluten-Free</option>
-              <option value="nut-free">Nut-Free</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Equipment:</label>
-            <select id="equipment-filter">
-              <option value="">Any</option>
-              <option value="microwave">Microwave</option>
-              <option value="air-fryer">Air Fryer</option>
-              <option value="stove">Stove</option>
-            </select>
-          </div>
-        </div>
-        <button id="search-recipes">Search Recipes</button>
-        <div id="recipe-results"></div>
+          </fieldset>
+          <fieldset class="filter-group">
+            <legend>Dietary / Allergy</legend>
+            <label class="checkbox-label">
+              <input type="checkbox" name="dietary" value="vegetarian"> Vegetarian
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="dietary" value="gluten-free"> Gluten-Free
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="dietary" value="nut-free"> Nut-Free
+            </label>
+          </fieldset>
+          <fieldset class="filter-group">
+            <legend>Cooking Equipment</legend>
+            <label class="checkbox-label">
+              <input type="checkbox" name="equipment" value="microwave" checked> Microwave
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="equipment" value="air-fryer" checked> Air Fryer
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="equipment" value="stove" checked> Stove
+            </label>
+          </fieldset>
+          <button type="submit" class="btn-primary">Apply Filters</button>
+          <p class="view-hint" id="filters-saved" hidden>Filters saved to your profile.</p>
+        </form>
       </section>
 
+      <!-- Manage Food: Add Ingredient -> Food Inventory -->
       <section id="manage-food" class="view">
         <h2>Manage Food</h2>
-        <div id="add-ingredient-form">
-          <input type="text" id="pantry-ingredient-name" placeholder="Ingredient name">
-          <input type="number" id="pantry-ingredient-quantity" placeholder="Quantity">
-          <input type="text" id="pantry-ingredient-unit" placeholder="Unit (e.g., cups, pieces)">
-          <button id="add-to-pantry">Add to Pantry</button>
-        </div>
+        <form id="pantry-form" novalidate>
+          <div class="form-row">
+            <input type="text" id="pantry-ingredient-name" placeholder="Ingredient name"
+                   autocomplete="off" maxlength="60">
+            <input type="text" id="pantry-ingredient-quantity"
+                   placeholder="Quantity (optional, e.g. &quot;half a carton&quot;)"
+                   autocomplete="off" maxlength="60">
+          </div>
+          <p class="field-error" id="pantry-error" hidden></p>
+          <button type="submit" id="add-to-pantry">Add Ingredient</button>
+        </form>
+        <h3>Food Inventory</h3>
         <div id="pantry-list"></div>
+        <div class="button-row">
+          <button id="mark-cooked" class="btn-secondary">Mark as Cooked</button>
+          <button id="clear-pantry" class="btn-danger">Clear All</button>
+        </div>
       </section>
 
+      <!-- Shopping: Shopping List -> Store/Deals -->
       <section id="shopping" class="view">
         <h2>Shopping List</h2>
+        <form id="shopping-form" novalidate>
+          <div class="form-row">
+            <input type="text" id="shopping-item-name" placeholder="Add item"
+                   autocomplete="off" maxlength="60">
+            <button type="submit" id="add-shopping-item">Add</button>
+          </div>
+          <p class="field-error" id="shopping-error" hidden></p>
+        </form>
         <div id="shopping-list"></div>
-        <div id="grocery-deals">
-          <h3>Deals</h3>
-          <div id="deals-list"></div>
-        </div>
+        <button id="done-shopping" class="btn-primary">Done Shopping</button>
+        <h3>Store Deals</h3>
+        <div id="deals-list"></div>
+      </section>
+
+      <!-- About/Help Page -->
+      <section id="about-help" class="view">
+        <h2>About / Help</h2>
+        <article class="help-content">
+          <h3>What is MealMate?</h3>
+          <p>MealMate helps college students cook cheap meals with the ingredients
+          they already have, cut down on takeout, and stop wasting food.</p>
+          <h3>How to use it</h3>
+          <ol>
+            <li><strong>Manage Food</strong> &mdash; type in what&rsquo;s in your
+              fridge or pantry.</li>
+            <li><strong>Filters</strong> &mdash; set your budget, available
+              equipment, and any allergies.</li>
+            <li><strong>Find Meals</strong> &mdash; enter what you have, search,
+              and pick a recipe. Close matches show what you&rsquo;re missing.</li>
+            <li><strong>Recipe Details</strong> &mdash; steps, appliances, and
+              calories/macros per serving.</li>
+            <li><strong>Shopping</strong> &mdash; missing ingredients become a
+              checklist with local store deals. Check items off, then hit
+              <em>Done Shopping</em> to move them into your pantry.</li>
+          </ol>
+          <h3>Tips</h3>
+          <ul>
+            <li>Staples like salt, pepper, oil, and butter are ignored when
+              matching &mdash; we assume your roommates have them.</li>
+            <li>Quantities are optional plain text &mdash; &ldquo;half a
+              carton&rdquo; works fine.</li>
+          </ul>
+        </article>
       </section>
     </main>
   </div>
